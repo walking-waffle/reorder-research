@@ -1,6 +1,15 @@
 /*
 =======================================================
-./el2csr.out file.el
+Before execution, make sure the input file has been initialized 
+(using konectINIT.cpp).
+
+This program converts an edge list (.el) into CSR format.
+
+Usage:
+./a.out file.el
+
+Conversion:
+graph.el -> graphCSR
 =======================================================
 */
 

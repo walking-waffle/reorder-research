@@ -1,3 +1,22 @@
+/*
+-----------------------------------
+Usage:
+  ./a.out file.el
+
+The input file (file.el) must be initialized and correctly formatted before running the program.
+
+The program will generate a reordered .el file based on the following strategies:
+  - Random Order
+  - Degree Sort
+  - Hub Sort              (Y. Zhang, V. Kiriansky, C. Mendis, S. Amarasinghe and M. Zaharia, "Making Caches Work for Graph Analytics," in Proceedings of the International Conference on Big Data (Big Data), January 2018.)
+  - Hub Clustering        (V. Balaji and B. Lucia, "When is Graph Reordering an Optimization? Studying the Effect of Lightweight Graph Reordering Across Applications and Input Graphs," in Proceedings of the International Symposium on Workload Characterization (IISWC), September 2018.)
+  - Degree-Based Grouping (P. Faldu and J. Diamond and B. Grot, "A Closer Look at Lightweight Graph Reordering," in Proceedings of the International Symposium on Workload Characterization (IISWC), November 2019.)
+  - BFS Ordering          (This paper)
+  - Reverse BFS Ordering  (This paper)
+
+Execution time for each method will be recorded in log.txt.
+-----------------------------------
+*/
 #include <iostream>
 #include <cstdlib>
 #include <fstream>
@@ -5,19 +24,15 @@
 #include <vector>
 #include <queue>
 #include <stack>
-#include <chrono>
 #include <algorithm>
 #include <random>
 #include <iomanip>
-#include <cmath>
-#include <climits>
-#include <unordered_set>
 
 using namespace std;
 
 struct Node {
     int id;
-    int numOfDeg;
+    int deg;
 };
 
 struct Edge {
@@ -75,35 +90,6 @@ void el2CSR( vector<Edge> el, int n, vector<int> & OA, vector<int> & EA ) {
     // ---------------------------------------- EA 完成
 
 } // el2CSR
-
-// 將圖的edge list格式轉換為CSC格式
-void el2CSC( vector<Edge> el, int n, vector<int> & OA, vector<int> & EA ) {
-
-    OA.resize( n + 1, 0 );
-
-    // 計算每個節點的鄰居數量
-    for ( Edge e : el )
-        OA.at(e.dst.id + 1)++;
-
-    // 累積計算每個節點的起始位置
-    for ( int i = 1; i <= n; i++ )
-        OA.at(i) += OA.at(i - 1);
-    // ---------------------------------------- OA 完成
-    EA.resize( el.size() );
-
-    // 將邊緣列表中的節點添加到對應的位置
-    vector<int> nextIndex( n, 0 );
-
-    for ( Edge e : el ) {
-        int node1 = e.dst.id;
-        int node2 = e.src.id;
-        int idx = OA.at(node1) + nextIndex.at(node1);
-        EA.at(idx) = node2;
-        nextIndex.at(node1)++;
-    } // for
-    // ---------------------------------------- EA 完成
-
-} // el2CSC
 
 void sortEdgeList( vector<Edge> & el ) {
     sort(el.begin(), el.end(), [](const Edge & a, const Edge & b)->bool{
@@ -177,55 +163,24 @@ vector<int> bfs( vector<int> & OA, vector<int> & EA, int & begin, bool* & visite
         } // for
     } // while
 
-    cout << "maximum components:" << result.size() << "\n";
     return result;
 } // bfs
-
-// 深度優先搜索 (DFS)
-vector<int> dfs( vector<int> OA, vector<int> EA, int begin ) {
-    int n = OA.size() - 1;
-    vector<bool> visited( n, false );
-    vector <int> result;;
-
-    stack<int> s;
-    s.push(begin);
-    visited.at(begin) = true;
-
-    while ( !s.empty() ) {
-        int current = s.top();
-        s.pop();
-
-        // 找到目標
-        result.push_back(current);
-
-        // 將當前節點的鄰接節點加入堆疊（反向加入）
-        for ( int i = OA.at(current + 1) - 1; i >= OA.at(current); i-- ) {
-            int neighbor = EA.at(i);
-            if ( !visited.at(neighbor) ) {
-                s.push(neighbor);
-                visited.at(neighbor) = true;
-            } // if
-        } // for
-    } // while
-
-    return result;
-} // dfs
 
 vector<int> degSort( vector<Edge> & el, int & n ) {
     vector<int> OA, EA;
     el2CSR(el, n, OA, EA);
 
-    // node info, include id and numOfDeg
+    // node info, include id and deg
     vector<Node> nodeList(n);
     
     // complete nodeList
     for ( int i = 0; i < OA.size()-1; i++ ) {
         nodeList[i].id = i;
-        nodeList[i].numOfDeg = OA[i+1]-OA[i];
+        nodeList[i].deg = OA[i+1]-OA[i];
     } // for
 
     sort(nodeList.begin(), nodeList.end(), [](const Node& a, const Node& b) {
-        return a.numOfDeg > b.numOfDeg;
+        return a.deg > b.deg;
     });
     
     vector<int> invertedList(n);
@@ -241,25 +196,25 @@ vector<int> hubSort( vector<Edge> & el, int & n ) {
     vector<int> OA, EA;
     el2CSR(el, n, OA, EA);
 
-    // node info, include id and numOfDeg
+    // node info, include id and deg
     vector<Node> nodeList(n);
     
     // complete nodeList
     for ( int i = 0; i < OA.size()-1; i++ ) {
         nodeList[i].id = i;
-        nodeList[i].numOfDeg = OA[i+1]-OA[i];
+        nodeList[i].deg = OA[i+1]-OA[i];
     } // for
 
     vector<Node> hot, cold;
     for ( Node v : nodeList ) {
-        if ( v.numOfDeg > avgDeg )
+        if ( v.deg > avgDeg )
             hot.push_back( v );
         else
             cold.push_back( v );
     } // for
 
     sort(hot.begin(), hot.end(), [](const Node& a, const Node& b) {
-        return a.numOfDeg > b.numOfDeg;
+        return a.deg > b.deg;
     });
 
     hot.insert( hot.end(), cold.begin(), cold.end() );
@@ -277,18 +232,18 @@ vector<int> hubCluster( vector<Edge> & el, int & n ) {
     vector<int> OA, EA;
     el2CSR(el, n, OA, EA);
 
-    // node info, include id and numOfDeg
+    // node info, include id and deg
     vector<Node> nodeList(n);
     
     // complete nodeList
     for ( int i = 0; i < OA.size()-1; i++ ) {
         nodeList[i].id = i;
-        nodeList[i].numOfDeg = OA[i+1]-OA[i];
+        nodeList[i].deg = OA[i+1]-OA[i];
     } // for
 
     vector<Node> hot, cold;
     for ( Node v : nodeList ) {
-        if ( v.numOfDeg > avgDeg )
+        if ( v.deg > avgDeg )
             hot.push_back( v );
         else
             cold.push_back( v );
@@ -309,13 +264,13 @@ vector<int> dbg( vector<Edge> & el, int & n ) {
     vector<int> OA, EA;
     el2CSR(el, n, OA, EA);
 
-    // node info, include id and numOfDeg
+    // node info, include id and deg
     vector<Node> nodeList(n);
     
     // complete nodeList
     for ( int i = 0; i < OA.size()-1; i++ ) {
         nodeList[i].id = i;
-        nodeList[i].numOfDeg = OA[i+1]-OA[i];
+        nodeList[i].deg = OA[i+1]-OA[i];
     } // for
 
     int threshold[8] = {avgDeg/2, avgDeg, avgDeg*2, avgDeg*4, avgDeg*8, avgDeg*16, avgDeg*32, INT_MAX};
@@ -324,7 +279,7 @@ vector<int> dbg( vector<Edge> & el, int & n ) {
     // Classify nodes into 8 positions of groups according to degree
     for ( int i = 0 ; i < n ; i++ ) {
         for ( int j = 0 ; j < 8 ; j++ ) {
-            if ( nodeList[i].numOfDeg <= threshold[j] ) {
+            if ( nodeList[i].deg <= threshold[j] ) {
                 groups[j].push_back(i);
                 break;
             } // if
@@ -447,41 +402,41 @@ void processReorder( string & fileName ) {
     vector<int> newOrder;
     readEdgeList( fileName, el, n );
     cout << "Read edgeList file finish.\n";
-/*
+
     start = clock();
     newOrder = randomOrder( el, n );
     end = clock();
     timeLogList.push_back( (1000.0)*(double)(end-start)/CLOCKS_PER_SEC );
-    reorderNameList.push_back( "DBG |" );
+    reorderNameList.push_back( "Random Order |" );
     writeEdgeListFile( fileName, el, newOrder, "_RO" );
-*/
+
     start = clock();
     newOrder = degSort( el, n );
     end = clock();
     timeLogList.push_back( (1000.0)*(double)(end-start)/CLOCKS_PER_SEC );
     reorderNameList.push_back( "Deg Sort |" );
-    writeEdgeListFile( fileName, el, newOrder, "_D1" );
+    writeEdgeListFile( fileName, el, newOrder, "_DS" );
 
     start = clock();
     newOrder = hubSort( el, n );
     end = clock();
     timeLogList.push_back( (1000.0)*(double)(end-start)/CLOCKS_PER_SEC );
     reorderNameList.push_back( "Hub Sort |" );
-    writeEdgeListFile( fileName, el, newOrder, "_D2" );
+    writeEdgeListFile( fileName, el, newOrder, "_HS" );
 
     start = clock();
     newOrder = hubCluster( el, n );
     end = clock();
     timeLogList.push_back( (1000.0)*(double)(end-start)/CLOCKS_PER_SEC );
     reorderNameList.push_back( "Hub Cluster |" );
-    writeEdgeListFile( fileName, el, newOrder, "_D3" );
+    writeEdgeListFile( fileName, el, newOrder, "_HC" );
 
     start = clock();
     newOrder = dbg( el, n );
     end = clock();
     timeLogList.push_back( (1000.0)*(double)(end-start)/CLOCKS_PER_SEC );
     reorderNameList.push_back( "DBG |" );
-    writeEdgeListFile( fileName, el, newOrder, "_D4" );
+    writeEdgeListFile( fileName, el, newOrder, "_DBG" );
 
     start = clock();
     newOrder = bfsOrder( el, n );

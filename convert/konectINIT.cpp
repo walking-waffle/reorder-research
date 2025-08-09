@@ -1,9 +1,22 @@
 /*
 =======================================================
-./init.out uni fileName   // for konect unigraph
-./init.out bi fileName    // for konect bipartite
+Graph source: http://konect.cc/networks/
 
-*****.txt->.el*****
+Before using, make sure the dataset shows "Dataset is available for download".
+After downloading the compressed file, locate the file starting with "out" — 
+this is the file that contains the graph data in edge list format.
+
+Usage:
+./a.out uni fileName   // For KONECT unipartite graphs
+./a.out bi fileName    // For KONECT bipartite graphs
+
+Output:
+The generated .el file contains only the edge list.
+- Nodes are represented by unique IDs starting from 0.
+- No additional metadata is included (only edges).
+- The structure is standardized for further processing.
+
+.txt → .el
 =======================================================
 */
 
@@ -21,8 +34,8 @@ struct Edge {
 };
 
 void makeStart0 ( vector<Edge> & el ) {
-    int leftMinID = el.at(0).src;
-    int rightMinID = el.at(0).dst;
+    int leftMinID = el[0].src;
+    int rightMinID = el[0].dst;
 
     for ( Edge e : el ) {
         if ( e.src < leftMinID )
@@ -110,7 +123,7 @@ void initBI( string & fileName ) {
     // 把無向圖的 edgeList 轉換成有向圖的 edgeList( 兩倍大 )
     int m = el.size();
     for ( int i = 0; i < m; i++ )
-        el.push_back({el.at(i).dst, el.at(i).src});
+        el.push_back({el[i].dst, el[i].src});
 
     // 寫檔
     writeEdgeListFile( fileName, el );
